@@ -10,17 +10,67 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [countryOfOrigin, setCountryOfOrigin] = useState('Ukraine');
-  const [currentLocation, setCurrentLocation] = useState('Krakow, Poland');
+  const [countryOfOrigin, setCountryOfOrigin] = useState('India');
+  const [currentLocation, setCurrentLocation] = useState('Delhi, India');
+  const [customCountry, setCustomCountry] = useState('');
+  const [customLocation, setCustomLocation] = useState('');
   const [organization, setOrganization] = useState('');
   const [verifierType, setVerifierType] = useState('clinic');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const countriesList = [
+    'India',
+    'Ukraine',
+    'Afghanistan',
+    'Syria',
+    'Sudan',
+    'Somalia',
+    'Myanmar',
+    'Palestine',
+    'Yemen',
+    'Venezuela',
+    'Colombia',
+    'Iraq',
+    'Ethiopia',
+    'Eritrea',
+    'Nigeria',
+    'Turkey',
+    'Pakistan',
+    'Bangladesh',
+    'Nepal',
+    'Sri Lanka',
+    'Philippines',
+    'Vietnam',
+    'Other',
+  ];
+
+  const locationsList = [
+    'Delhi, India',
+    'Mumbai, India',
+    'Bangalore, India',
+    'Warsaw, Poland',
+    'Krakow, Poland',
+    'Berlin, Germany',
+    'Bucharest, Romania',
+    'Prague, Czechia',
+    'Budapest, Hungary',
+    'Chișinău, Moldova',
+    'Istanbul, Turkey',
+    'Geneva, Switzerland',
+    'London, UK',
+    'New York, USA',
+    'Toronto, Canada',
+    'Other',
+  ];
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    const finalCountry = countryOfOrigin === 'Other' ? (customCountry || 'Other') : countryOfOrigin;
+    const finalLocation = currentLocation === 'Other' ? (customLocation || 'Other') : currentLocation;
 
     try {
       const user = await register({
@@ -28,8 +78,8 @@ export default function RegisterPage() {
         email,
         password,
         role,
-        countryOfOrigin,
-        currentLocation,
+        countryOfOrigin: finalCountry,
+        currentLocation: finalLocation,
         organization,
         verifierType,
       });
@@ -138,29 +188,67 @@ export default function RegisterPage() {
           </div>
 
           {role === 'refugee' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Country of Origin
-                </label>
-                <input
-                  type="text"
-                  value={countryOfOrigin}
-                  onChange={(e) => setCountryOfOrigin(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Country of Origin
+                  </label>
+                  <select
+                    value={countryOfOrigin}
+                    onChange={(e) => setCountryOfOrigin(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {countriesList.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Current Location
+                  </label>
+                  <select
+                    value={currentLocation}
+                    onChange={(e) => setCurrentLocation(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    {locationsList.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Current Location
-                </label>
-                <input
-                  type="text"
-                  value={currentLocation}
-                  onChange={(e) => setCurrentLocation(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
+
+              {countryOfOrigin === 'Other' && (
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Specify Country of Origin"
+                    value={customCountry}
+                    onChange={(e) => setCustomCountry(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              )}
+
+              {currentLocation === 'Other' && (
+                <div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Specify Current Location (City, Country)"
+                    value={customLocation}
+                    onChange={(e) => setCustomLocation(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
