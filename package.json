@@ -1,0 +1,23 @@
+{
+  "name": "identichain",
+  "version": "1.0.0",
+  "description": "Refugee-owned, cross-border, AI-powered digital identity and document vault",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "seed": "node backend/seed.js",
+    "setup": "npm --prefix backend install && npm --prefix frontend install && npm --prefix frontend run build",
+    "dev:backend": "npm --prefix backend start",
+    "dev:frontend": "npm --prefix frontend run dev"
+  },
+  "keywords": [
+    "digital-identity",
+    "refugee",
+    "document-vault",
+    "sha256",
+    "ai-triage",
+    "cross-border"
+  ],
+  "author": "IdentiChain Team",
+  "license": "MIT"
+}
