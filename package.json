@@ -8,8 +8,12 @@
     "start": "node backend/server.js",
     "seed": "node backend/seed.js",
     "setup": "npm --prefix backend install && npm --prefix frontend install && npm --prefix frontend run build",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm --prefix backend start",
     "dev:frontend": "npm --prefix frontend run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   },
   "keywords": [
     "digital-identity",
