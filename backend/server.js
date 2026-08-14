@@ -34,15 +34,14 @@ app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Ensure DB Connection Middleware for API requests
+// Ensure DB Connection Middleware for API requests (Non-blocking for serverless fallback)
 app.use('/api', async (req, res, next) => {
   try {
     await connectDB();
-    next();
   } catch (err) {
-    console.error('Database connection middleware error:', err);
-    res.status(500).json({ message: 'Database connection failed' });
+    console.warn('Database connection middleware warning:', err.message);
   }
+  next();
 });
 
 // Serve Uploaded Files Statically

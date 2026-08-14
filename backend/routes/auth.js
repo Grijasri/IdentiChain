@@ -7,6 +7,11 @@ const QRCode = require('qrcode');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
+const mongoose = require('mongoose');
+
+// In-memory fallback store for serverless execution when Mongo connection is unavailable
+const memoryUsers = new Map();
+
 // Helper to generate QR code string
 const generateQRCode = async (text) => {
   try {
@@ -27,11 +32,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Name, email, and password are required.' });
     }
 
-    let existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(400).json({ message: 'An account with this email already exists.' });
-    }
-
+    const normalizedEmail = email.toLowerCase();
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -48,26 +49,59 @@ router.post('/register', async (req, res) => {
     });
     const qrCodeUrl = await generateQRCode(qrPayload);
 
-    const newUser = new User({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role: role || 'refugee',
-      digitalId,
-      countryOfOrigin: countryOfOrigin || 'Ukraine',
-      currentLocation: currentLocation || 'Krakow, Poland',
-      qrCodeUrl,
-      organization: organization || '',
-      verifierType: verifierType || '',
-    });
+    let activeUser = null;
 
-    await newUser.save();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let existingUser = await User.findOne({ email: normalizedEmail });
+        if (existingUser) {
+          return res.status(400).json({ message: 'An account with this email already exists.' });
+        }
+        const newUser = new User({
+          name,
+          email: normalizedEmail,
+          password: hashedPassword,
+          role: role || 'refugee',
+          digitalId,
+          countryOfOrigin: countryOfOrigin || 'Ukraine',
+          currentLocation: currentLocation || 'Krakow, Poland',
+          qrCodeUrl,
+          organization: organization || '',
+          verifierType: verifierType || '',
+        });
+        await newUser.save();
+        activeUser = newUser;
+      } catch (dbErr) {
+        console.warn('DB save warning, switching to memory store:', dbErr.message);
+      }
+    }
+
+    if (!activeUser) {
+      if (memoryUsers.has(normalizedEmail)) {
+        return res.status(400).json({ message: 'An account with this email already exists.' });
+      }
+      activeUser = {
+        _id: new mongoose.Types.ObjectId(),
+        name,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: role || 'refugee',
+        digitalId,
+        countryOfOrigin: countryOfOrigin || 'Ukraine',
+        currentLocation: currentLocation || 'Krakow, Poland',
+        qrCodeUrl,
+        organization: organization || '',
+        verifierType: verifierType || '',
+      };
+      memoryUsers.set(normalizedEmail, activeUser);
+    }
 
     const payload = {
-      id: newUser._id,
-      role: newUser.role,
-      digitalId: newUser.digitalId,
-      name: newUser.name,
+      id: activeUser._id,
+      role: activeUser.role,
+      digitalId: activeUser.digitalId,
+      name: activeUser.name,
+      email: activeUser.email,
     };
 
     const token = jwt.sign(
@@ -79,16 +113,16 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       token,
       user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        digitalId: newUser.digitalId,
-        countryOfOrigin: newUser.countryOfOrigin,
-        currentLocation: newUser.currentLocation,
-        qrCodeUrl: newUser.qrCodeUrl,
-        organization: newUser.organization,
-        verifierType: newUser.verifierType,
+        id: activeUser._id,
+        name: activeUser.name,
+        email: activeUser.email,
+        role: activeUser.role,
+        digitalId: activeUser.digitalId,
+        countryOfOrigin: activeUser.countryOfOrigin,
+        currentLocation: activeUser.currentLocation,
+        qrCodeUrl: activeUser.qrCodeUrl,
+        organization: activeUser.organization,
+        verifierType: activeUser.verifierType,
       },
     });
   } catch (err) {
@@ -107,7 +141,21 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase();
+    let user = null;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findOne({ email: normalizedEmail });
+      } catch (dbErr) {
+        console.warn('DB search warning:', dbErr.message);
+      }
+    }
+
+    if (!user) {
+      user = memoryUsers.get(normalizedEmail);
+    }
+
     if (!user) {
       return res.status(400).json({ message: 'Invalid email or password.' });
     }
@@ -122,6 +170,7 @@ router.post('/login', async (req, res) => {
       role: user.role,
       digitalId: user.digitalId,
       name: user.name,
+      email: user.email,
     };
 
     const token = jwt.sign(
@@ -155,7 +204,20 @@ router.post('/login', async (req, res) => {
 // @desc    Get current user profile
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        user = await User.findById(req.user.id).select('-password');
+      } catch (e) {}
+    }
+    if (!user) {
+      for (const u of memoryUsers.values()) {
+        if (u._id.toString() === req.user.id.toString() || u.email === req.user.email) {
+          user = u;
+          break;
+        }
+      }
+    }
     if (!user) {
       return res.status(404).json({ message: 'User profile not found.' });
     }
