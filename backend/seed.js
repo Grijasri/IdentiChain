@@ -13,15 +13,24 @@ const AidRequest = require('./models/AidRequest');
 const Transaction = require('./models/Transaction');
 const { generateFileHash, generateTxHash } = require('./services/hashService');
 
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const os = require('os');
+const uploadsDir = process.env.VERCEL ? os.tmpdir() : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Seed uploads directory creation skipped (read-only system):', e.message);
 }
 
 // Helper to create sample file in uploads
 const createDummyFile = (filename, content) => {
   const filePath = path.join(uploadsDir, filename);
-  fs.writeFileSync(filePath, content);
+  try {
+    fs.writeFileSync(filePath, content);
+  } catch (e) {
+    console.warn('Seed dummy file creation skipped:', e.message);
+  }
   return filePath;
 };
 

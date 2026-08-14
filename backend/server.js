@@ -16,17 +16,24 @@ const User = require('./models/User');
 
 const app = express();
 
-// Connect Database & Auto-seed if empty
+const mongoose = require('mongoose');
+const os = require('os');
+
+// Connect Database & Auto-seed if empty (safe for serverless)
 connectDB().then(async () => {
   try {
-    const userCount = await User.countDocuments({});
-    if (userCount === 0) {
-      console.log('Database empty. Running automatic demo seed...');
-      await seedData();
+    if (mongoose.connection.readyState === 1) {
+      const userCount = await User.countDocuments({});
+      if (userCount === 0) {
+        console.log('Database empty. Running automatic demo seed...');
+        await seedData();
+      }
     }
   } catch (err) {
-    console.error('Auto-seed check error:', err);
+    console.warn('Auto-seed check warning:', err.message);
   }
+}).catch((err) => {
+  console.warn('DB connect warning:', err.message);
 });
 
 // Middleware
@@ -45,9 +52,13 @@ app.use('/api', async (req, res, next) => {
 });
 
 // Serve Uploaded Files Statically
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsDir = process.env.VERCEL ? os.tmpdir() : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Uploads directory creation skipped:', e.message);
 }
 app.use('/uploads', express.static(uploadsDir));
 

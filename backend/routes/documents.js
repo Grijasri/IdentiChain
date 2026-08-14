@@ -8,10 +8,14 @@ const auth = require('../middleware/auth');
 const { generateFileHash } = require('../services/hashService');
 const { classifyDocument } = require('../services/aiService');
 
-// Ensure uploads folder exists
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const os = require('os');
+const uploadsDir = process.env.VERCEL ? os.tmpdir() : path.join(__dirname, '../uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Documents upload dir creation skipped:', e.message);
 }
 
 // Multer storage setup
