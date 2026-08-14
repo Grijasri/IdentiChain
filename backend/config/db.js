@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+// Disable Mongoose command buffering so serverless functions never hang or time out when DB is unreachable
+mongoose.set('bufferCommands', false);
+
 let mongoMemoryServer = null;
 
 const connectDB = async () => {
@@ -12,7 +15,7 @@ const connectDB = async () => {
   if (uri) {
     try {
       console.log(`Connecting to MongoDB...`);
-      await mongoose.connect(uri, { serverSelectionTimeoutMS: 3000 });
+      await mongoose.connect(uri, { serverSelectionTimeoutMS: 2000 });
       console.log('MongoDB connected successfully via MONGODB_URI.');
       return;
     } catch (err) {
@@ -21,7 +24,7 @@ const connectDB = async () => {
   }
 
   try {
-    await mongoose.connect('mongodb://127.0.0.1:27017/identichain', { serverSelectionTimeoutMS: 1500 });
+    await mongoose.connect('mongodb://127.0.0.1:27017/identichain', { serverSelectionTimeoutMS: 1000 });
     console.log('MongoDB connected successfully via local URI.');
     return;
   } catch (localErr) {
@@ -42,5 +45,6 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
+
 
 
