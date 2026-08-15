@@ -41,6 +41,16 @@ const defaultDemoUsers = [
   },
   {
     _id: '660a33333333333333333333',
+    name: 'Iryna Boyko',
+    email: 'iryna@identichain.org',
+    password: defaultRefugeeHash,
+    role: 'refugee',
+    digitalId: 'IDC-54E9-21D8-8A47',
+    countryOfOrigin: 'Ukraine (Mariupol)',
+    currentLocation: 'Berlin, Germany',
+  },
+  {
+    _id: '660a44444444444444444444',
     name: 'Dr. Olena Kovalenko (UNHCR Clinic)',
     email: 'verifier.clinic@identichain.org',
     password: defaultVerifierHash,
@@ -52,7 +62,7 @@ const defaultDemoUsers = [
     currentLocation: 'Krakow, Poland',
   },
   {
-    _id: '660a44444444444444444444',
+    _id: '660a55555555555555555555',
     name: 'Jan Nowak (PKO Bank Relief)',
     email: 'verifier.bank@identichain.org',
     password: defaultVerifierHash,
@@ -62,6 +72,18 @@ const defaultDemoUsers = [
     verifierType: 'bank',
     countryOfOrigin: 'Poland',
     currentLocation: 'Warsaw, Poland',
+  },
+  {
+    _id: '660a66666666666666666666',
+    name: 'Anna Schmidt (German Red Cross)',
+    email: 'verifier.ngo@identichain.org',
+    password: defaultVerifierHash,
+    role: 'verifier',
+    digitalId: 'IDC-VERIFIER-NGO-03',
+    organization: 'German Red Cross Displacement Support Desk',
+    verifierType: 'ngo',
+    countryOfOrigin: 'Germany',
+    currentLocation: 'Berlin, Germany',
   },
 ];
 
