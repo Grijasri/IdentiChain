@@ -6,11 +6,92 @@ const { v4: uuidv4 } = require('uuid');
 const QRCode = require('qrcode');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
-
 const mongoose = require('mongoose');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
-// In-memory fallback store for serverless execution when Mongo connection is unavailable
-const memoryUsers = new Map();
+// Persistent storage file in /tmp for serverless environments
+const storageFile = path.join(os.tmpdir(), 'identichain_users_vault.json');
+
+// Pre-generated password hashes for demo accounts
+const defaultRefugeeHash = bcrypt.hashSync('refugee123', 10);
+const defaultVerifierHash = bcrypt.hashSync('verifier123', 10);
+
+const defaultDemoUsers = [
+  {
+    _id: '660a11111111111111111111',
+    name: 'Oksana Petrenko',
+    email: 'oksana@identichain.org',
+    password: defaultRefugeeHash,
+    role: 'refugee',
+    digitalId: 'IDC-8F92-4A71-9B3E',
+    countryOfOrigin: 'Ukraine (Kyiv)',
+    currentLocation: 'Warsaw, Poland',
+  },
+  {
+    _id: '660a22222222222222222222',
+    name: 'Mykhailo Shevchenko',
+    email: 'mykhailo@identichain.org',
+    password: defaultRefugeeHash,
+    role: 'refugee',
+    digitalId: 'IDC-73B1-92F0-4C11',
+    countryOfOrigin: 'Ukraine (Kharkiv)',
+    currentLocation: 'Krakow, Poland',
+  },
+  {
+    _id: '660a33333333333333333333',
+    name: 'Dr. Olena Kovalenko (UNHCR Clinic)',
+    email: 'verifier.clinic@identichain.org',
+    password: defaultVerifierHash,
+    role: 'verifier',
+    digitalId: 'IDC-VERIFIER-CLINIC-01',
+    organization: 'UNHCR Poland Border Health Clinic',
+    verifierType: 'clinic',
+    countryOfOrigin: 'Ukraine',
+    currentLocation: 'Krakow, Poland',
+  },
+  {
+    _id: '660a44444444444444444444',
+    name: 'Jan Nowak (PKO Bank Relief)',
+    email: 'verifier.bank@identichain.org',
+    password: defaultVerifierHash,
+    role: 'verifier',
+    digitalId: 'IDC-VERIFIER-BANK-02',
+    organization: 'PKO Bank Polski Humanitarian Integration Unit',
+    verifierType: 'bank',
+    countryOfOrigin: 'Poland',
+    currentLocation: 'Warsaw, Poland',
+  },
+];
+
+const getMemoryUsers = () => {
+  const map = new Map();
+  defaultDemoUsers.forEach((u) => map.set(u.email.toLowerCase(), u));
+  try {
+    if (fs.existsSync(storageFile)) {
+      const raw = fs.readFileSync(storageFile, 'utf8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        list.forEach((u) => map.set(u.email.toLowerCase(), u));
+      }
+    }
+  } catch (e) {
+    console.warn('Memory user storage read error:', e.message);
+  }
+  return map;
+};
+
+const saveMemoryUser = (userObj) => {
+  const map = getMemoryUsers();
+  map.set(userObj.email.toLowerCase(), userObj);
+  try {
+    const list = Array.from(map.values());
+    fs.writeFileSync(storageFile, JSON.stringify(list), 'utf8');
+  } catch (e) {
+    console.warn('Memory user storage write error:', e.message);
+  }
+};
 
 // Helper to generate QR code string
 const generateQRCode = async (text) => {
@@ -77,11 +158,12 @@ router.post('/register', async (req, res) => {
     }
 
     if (!activeUser) {
-      if (memoryUsers.has(normalizedEmail)) {
+      const memoryUsersMap = getMemoryUsers();
+      if (memoryUsersMap.has(normalizedEmail)) {
         return res.status(400).json({ message: 'An account with this email already exists.' });
       }
       activeUser = {
-        _id: new mongoose.Types.ObjectId(),
+        _id: new mongoose.Types.ObjectId().toString(),
         name,
         email: normalizedEmail,
         password: hashedPassword,
@@ -93,7 +175,7 @@ router.post('/register', async (req, res) => {
         organization: organization || '',
         verifierType: verifierType || '',
       };
-      memoryUsers.set(normalizedEmail, activeUser);
+      saveMemoryUser(activeUser);
     }
 
     const payload = {
@@ -153,7 +235,8 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
-      user = memoryUsers.get(normalizedEmail);
+      const memoryUsersMap = getMemoryUsers();
+      user = memoryUsersMap.get(normalizedEmail);
     }
 
     if (!user) {
@@ -211,8 +294,10 @@ router.get('/me', auth, async (req, res) => {
       } catch (e) {}
     }
     if (!user) {
-      for (const u of memoryUsers.values()) {
-        if (u._id.toString() === req.user.id.toString() || u.email === req.user.email) {
+      const memoryUsersMap = getMemoryUsers();
+      for (const u of memoryUsersMap.values()) {
+        const uId = u._id ? u._id.toString() : '';
+        if (uId === req.user.id.toString() || u.email.toLowerCase() === req.user.email?.toLowerCase()) {
           user = u;
           break;
         }
@@ -229,3 +314,4 @@ router.get('/me', auth, async (req, res) => {
 });
 
 module.exports = router;
+
