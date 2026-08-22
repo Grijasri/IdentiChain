@@ -154,12 +154,22 @@ const saveMemoryDocumentsList = (list) => {
 
 const getMemoryDocuments = (userId, category) => {
   const docs = getMemoryDocumentsList();
-  return docs.filter((d) => {
-    const userMatch = d.userId.toString() === userId.toString();
+  
+  // Find docs explicitly belonging to this user
+  const userSpecificDocs = docs.filter((d) => {
+    const userMatch = userId && d.userId && d.userId.toString() === userId.toString();
     const categoryMatch = !category || category === 'all' || d.category === category;
     return userMatch && categoryMatch;
   });
+
+  if (userSpecificDocs.length > 0) {
+    return userSpecificDocs;
+  }
+
+  // Otherwise return demo docs filtered by category
+  return docs.filter((d) => !category || category === 'all' || d.category === category);
 };
+
 
 const saveMemoryDocument = (docObj) => {
   const docs = getMemoryDocumentsList();

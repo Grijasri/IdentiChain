@@ -8,6 +8,8 @@ import Toast from '../components/Toast';
 import API from '../services/api';
 import { FileText, UploadCloud, Search, ShieldCheck, Lock, Globe, Plus } from 'lucide-react';
 
+import { mergeVaultDocuments, updateLocalDocVisibility, deleteLocalDoc } from '../services/vaultStorage';
+
 export default function VaultPage() {
   const { user } = useAuth();
   const [documents, setDocuments] = useState([]);
@@ -24,9 +26,13 @@ export default function VaultPage() {
     setLoading(true);
     try {
       const res = await API.get('/documents');
-      setDocuments(res.data);
+      const merged = mergeVaultDocuments(res.data, user?.id);
+      setDocuments(merged);
     } catch (err) {
       console.error('Fetch vault error:', err);
+      if (user?.id) {
+        setDocuments(mergeVaultDocuments([], user.id));
+      }
     } finally {
       setLoading(false);
     }
@@ -34,12 +40,13 @@ export default function VaultPage() {
 
   useEffect(() => {
     fetchDocuments();
-  }, []);
+  }, [user?.id]);
 
   const handleToggleVisibility = async (id) => {
     try {
       const res = await API.patch(`/documents/${id}/visibility`);
       setDocuments(prev => prev.map(d => d._id === id ? { ...d, isShareable: res.data.isShareable } : d));
+      if (user?.id) updateLocalDocVisibility(user.id, id, res.data.isShareable);
       showToast('info', 'Visibility Updated', res.data.message);
     } catch (err) {
       console.error('Toggle error:', err);
@@ -51,11 +58,13 @@ export default function VaultPage() {
     try {
       await API.delete(`/documents/${id}`);
       setDocuments(prev => prev.filter(d => d._id !== id));
+      if (user?.id) deleteLocalDoc(user.id, id);
       showToast('success', 'Document Removed', 'Document deleted.');
     } catch (err) {
       console.error('Delete error:', err);
     }
   };
+
 
   // Filtered documents
   const filteredDocs = documents.filter((doc) => {

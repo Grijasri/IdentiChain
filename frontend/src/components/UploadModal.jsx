@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { X, UploadCloud, FileText, Sparkles, ShieldCheck, Lock, Globe, Loader2 } from 'lucide-react';
 import API from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { saveLocalDoc } from '../services/vaultStorage';
 
 export default function UploadModal({ isOpen, onClose, onSuccess, showToast }) {
+  const { user } = useAuth();
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [customCategory, setCustomCategory] = useState('');
@@ -45,11 +48,16 @@ export default function UploadModal({ isOpen, onClose, onSuccess, showToast }) {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      if (showToast) {
-        showToast('success', 'Document Verified & Uploaded', `SHA-256 Hash generated! AI categorized as ${res.data.document.category}`);
+      const uploadedDoc = res.data.document;
+      if (user?.id) {
+        saveLocalDoc(user.id, uploadedDoc);
       }
 
-      onSuccess(res.data.document);
+      if (showToast) {
+        showToast('success', 'Document Verified & Uploaded', `SHA-256 Hash generated! AI categorized as ${uploadedDoc.category}`);
+      }
+
+      if (onSuccess) onSuccess(uploadedDoc);
       onClose();
     } catch (err) {
       console.error('Upload error:', err);

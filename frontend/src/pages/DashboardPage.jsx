@@ -11,6 +11,8 @@ import Toast from '../components/Toast';
 import API from '../services/api';
 import { QrCode, UploadCloud, Stethoscope, Wallet, ShieldCheck, FileText, Activity, ArrowUpRight, Lock, Globe, Plus } from 'lucide-react';
 
+import { mergeVaultDocuments, updateLocalDocVisibility, deleteLocalDoc } from '../services/vaultStorage';
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -38,11 +40,15 @@ export default function DashboardPage() {
         API.get('/triage/history'),
         API.get('/wallet/summary'),
       ]);
-      setDocuments(docRes.data);
+      const mergedDocs = mergeVaultDocuments(docRes.data, user?.id);
+      setDocuments(mergedDocs);
       setTriageHistory(triageRes.data);
       setWallet(walletRes.data);
     } catch (err) {
       console.error('Fetch dashboard error:', err);
+      if (user?.id) {
+        setDocuments(mergeVaultDocuments([], user.id));
+      }
     } finally {
       setLoading(false);
     }
@@ -50,12 +56,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [user?.id]);
 
   const handleToggleVisibility = async (id) => {
     try {
       const res = await API.patch(`/documents/${id}/visibility`);
       setDocuments(prev => prev.map(d => d._id === id ? { ...d, isShareable: res.data.isShareable } : d));
+      if (user?.id) updateLocalDocVisibility(user.id, id, res.data.isShareable);
       showToast('info', 'Privacy Setting Updated', res.data.message);
     } catch (err) {
       console.error('Toggle error:', err);
@@ -67,11 +74,13 @@ export default function DashboardPage() {
     try {
       await API.delete(`/documents/${id}`);
       setDocuments(prev => prev.filter(d => d._id !== id));
+      if (user?.id) deleteLocalDoc(user.id, id);
       showToast('success', 'Document Deleted', 'Document removed from vault.');
     } catch (err) {
       console.error('Delete error:', err);
     }
   };
+
 
   const shareableCount = documents.filter(d => d.isShareable).length;
 
