@@ -43,6 +43,14 @@ const upload = multer({
   },
 });
 
+const mongoose = require('mongoose');
+const {
+  getMemoryDocuments,
+  saveMemoryDocument,
+  toggleMemoryDocVisibility,
+  deleteMemoryDocument,
+} = require('../services/memoryStore');
+
 // @route   POST /api/documents/upload
 // @desc    Upload document, generate SHA-256 hash, run AI classification, save metadata
 router.post('/upload', auth, upload.single('file'), async (req, res) => {
@@ -66,7 +74,8 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
       ? customCategory
       : aiClassification.category;
 
-    const newDoc = new Document({
+    const docObj = {
+      _id: 'doc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
       userId: req.user.id,
       title: title || fileName.split('.')[0],
       category: finalCategory,
@@ -83,13 +92,40 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         ledgerTx: '0x' + sha256Hash.substring(0, 32),
         verifiedAt: new Date(),
       },
-    });
+      uploadedAt: new Date(),
+    };
 
-    await newDoc.save();
+    let savedDoc = docObj;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const newDoc = new Document({
+          userId: req.user.id,
+          title: docObj.title,
+          category: docObj.category,
+          filename: docObj.filename,
+          filepath: docObj.filepath,
+          filetype: docObj.filetype,
+          filesize: docObj.filesize,
+          sha256Hash: docObj.sha256Hash,
+          isShareable: docObj.isShareable,
+          aiTags: docObj.aiTags,
+          aiConfidence: docObj.aiConfidence,
+          verificationBadge: docObj.verificationBadge,
+        });
+        await newDoc.save();
+        savedDoc = newDoc;
+      } catch (dbErr) {
+        console.warn('DB save warning during document upload, falling back to memory store:', dbErr.message);
+        savedDoc = saveMemoryDocument(docObj);
+      }
+    } else {
+      savedDoc = saveMemoryDocument(docObj);
+    }
 
     res.status(201).json({
       message: 'Document uploaded and cryptographically verified on ledger!',
-      document: newDoc,
+      document: savedDoc,
       aiClassification,
     });
   } catch (err) {
@@ -103,13 +139,22 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
 router.get('/', auth, async (req, res) => {
   try {
     const { category } = req.query;
-    let query = { userId: req.user.id };
-    if (category && category !== 'all') {
-      query.category = category;
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        let query = { userId: req.user.id };
+        if (category && category !== 'all') {
+          query.category = category;
+        }
+        const documents = await Document.find(query).sort({ uploadedAt: -1 });
+        return res.json(documents);
+      } catch (dbErr) {
+        console.warn('DB fetch error, using memory store:', dbErr.message);
+      }
     }
 
-    const documents = await Document.find(query).sort({ uploadedAt: -1 });
-    res.json(documents);
+    const memDocs = getMemoryDocuments(req.user.id, category);
+    res.json(memDocs);
   } catch (err) {
     console.error('Fetch documents error:', err);
     res.status(500).json({ message: 'Server error fetching documents.' });
@@ -120,18 +165,32 @@ router.get('/', auth, async (req, res) => {
 // @desc    Toggle document privacy (Private vs Shareable with verified orgs)
 router.patch('/:id/visibility', auth, async (req, res) => {
   try {
-    const doc = await Document.findOne({ _id: req.params.id, userId: req.user.id });
-    if (!doc) {
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const doc = await Document.findOne({ _id: req.params.id, userId: req.user.id });
+        if (doc) {
+          doc.isShareable = !doc.isShareable;
+          await doc.save();
+          return res.json({
+            message: `Document privacy set to ${doc.isShareable ? 'Shareable with Verified Orgs' : 'Private'}`,
+            isShareable: doc.isShareable,
+            document: doc,
+          });
+        }
+      } catch (dbErr) {
+        console.warn('DB visibility update warning, falling back to memory store:', dbErr.message);
+      }
+    }
+
+    const updatedDoc = toggleMemoryDocVisibility(req.params.id, req.user.id);
+    if (!updatedDoc) {
       return res.status(404).json({ message: 'Document not found.' });
     }
 
-    doc.isShareable = !doc.isShareable;
-    await doc.save();
-
     res.json({
-      message: `Document privacy set to ${doc.isShareable ? 'Shareable with Verified Orgs' : 'Private'}`,
-      isShareable: doc.isShareable,
-      document: doc,
+      message: `Document privacy set to ${updatedDoc.isShareable ? 'Shareable with Verified Orgs' : 'Private'}`,
+      isShareable: updatedDoc.isShareable,
+      document: updatedDoc,
     });
   } catch (err) {
     console.error('Visibility update error:', err);
@@ -143,15 +202,24 @@ router.patch('/:id/visibility', auth, async (req, res) => {
 // @desc    Delete document from vault
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const doc = await Document.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
-    if (!doc) {
-      return res.status(404).json({ message: 'Document not found.' });
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const doc = await Document.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+        if (doc) {
+          const fullPath = path.join(__dirname, '..', doc.filepath);
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+          }
+          return res.json({ message: 'Document deleted successfully from vault.' });
+        }
+      } catch (dbErr) {
+        console.warn('DB delete document warning, falling back to memory store:', dbErr.message);
+      }
     }
 
-    // Attempt to delete physical file
-    const fullPath = path.join(__dirname, '..', doc.filepath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
+    const deleted = deleteMemoryDocument(req.params.id, req.user.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Document not found.' });
     }
 
     res.json({ message: 'Document deleted successfully from vault.' });
@@ -162,3 +230,4 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+

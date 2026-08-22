@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
-// Disable Mongoose command buffering so serverless functions never hang or time out when DB is unreachable
-mongoose.set('bufferCommands', false);
+// Ensure default Mongoose settings for command buffering
+
 
 let mongoMemoryServer = null;
 
